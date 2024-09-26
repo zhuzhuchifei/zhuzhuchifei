@@ -1,0 +1,102 @@
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+
+from tensorflow import keras
+from keras.preprocessing.image import ImageDataGenerator
+from keras import models
+from keras import layers
+from keras import optimizers
+from keras import regularizers
+from keras.utils import to_categorical
+from keras.callbacks import EarlyStopping
+
+train_dir = 'C:/Users/Administrator/Desktop/123/train/'
+val_dir = 'C:/Users/Administrator/Desktop/123/test/'
+
+# 使用数据增强
+train_datagen = ImageDataGenerator(
+    rescale=1./255, 
+    rotation_range=90, 
+    width_shift_range=0.2, 
+    height_shift_range=0.2, 
+    shear_range=0.3, 
+    zoom_range=0.3, 
+    horizontal_flip=True,
+    vertical_flip=True,
+    fill_mode='nearest')
+
+val_datagen = ImageDataGenerator(
+    rescale=1./255)
+ 
+# 使用迭代器生成图片张量
+train_gen = train_datagen.flow_from_directory(train_dir, target_size=(500, 500), batch_size=32)
+val_gen = val_datagen.flow_from_directory(val_dir, target_size=(500, 500), batch_size=32)
+
+METRICS = [ 
+      keras.metrics.BinaryAccuracy(name='accuracy'),
+      keras.metrics.Precision(name='precision'),
+      keras.metrics.Recall(name='recall'),
+      keras.metrics.AUC(name='auc'),
+]
+
+model = models.Sequential()
+
+model.add(layers.Conv2D(64, (3, 3), activation='relu',input_shape=(500, 500, 3)))
+model.add(layers.MaxPool2D((2, 2)))
+
+model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+
+model.add(layers.Conv2D(256, (3, 3), activation='relu'))
+
+model.add(layers.MaxPooling2D((2, 2)))
+
+model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+# 展开成一维向量
+model.add(layers.Flatten())
+# 使用dropout操作
+model.add(layers.Dense(128, activation='relu'))
+model.add(layers.Dropout(0.20))
+
+model.add(layers.Dense(64, activation='relu'))
+model.add(layers.Dropout(0.20))
+
+model.add(layers.Dense(32, activation='relu'))
+model.add(layers.Dropout(0.20))
+
+model.add(layers.Dense(2, activation='softmax'))
+# 显示模型的层级结构
+model.summary()
+
+es= EarlyStopping(monitor='val_loss',mode='min',verbose=1,patience=5)
+# 编译模型
+model.compile(optimizer=optimizers.RMSprop(learning_rate=0.001), 
+              loss='binary_crossentropy', metrics=METRICS)
+# 训练模型
+history = model.fit(train_gen, epochs=15, validation_data=val_gen,callbacks=[es])
+
+loss,accuracy,precision,recall,auc = model.evaluate(train_gen)
+print('训练数据集的准确度 = {:.2f}'.format(accuracy))
+print('训练数据集的精确率 = {:.2f}'.format(precision))
+print('训练数据集的召回率 = {:.2f}'.format(recall))
+print('训练数据集的AUC = {:.2f}'.format(auc))
+loss,accuracy,precision,recall,auc = model.evaluate(val_gen)
+print('测试数据集的准确度 = {:.2f}'.format(accuracy))
+print('测试数据集的精确率 = {:.2f}'.format(precision))
+print('测试数据集的召回率 = {:.2f}'.format(recall))
+print('测试数据集的AUC = {:.2f}'.format(auc))
+
+fig,loss_ax = plt.subplots()
+acc_ax = loss_ax.twinx()
+loss_ax.plot(history.history['loss'],'y',label='train loss')
+
+acc_ax.plot(history.history['accuracy'],'b',label='train acc')
+
+loss_ax.set_xlabel('epoch')
+loss_ax.set_ylabel('loss')
+acc_ax.set_ylabel('accuracy')
+loss_ax.legend(loc='upper left')
+acc_ax.legend(loc='lower left')
+plt.show()
